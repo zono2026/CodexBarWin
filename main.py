@@ -1,6 +1,7 @@
 """CodexBarWin: always-on-top Windows widget showing Claude Code and Codex CLI usage."""
 
 import concurrent.futures
+import os
 import threading
 import tkinter as tk
 from tkinter import colorchooser
@@ -9,6 +10,7 @@ import claude_usage
 import codex_usage
 import config
 import formatting
+import startup
 
 APP_NAME = "CodexBarWin"
 # codex_usage.fetch_usage performs up to 2 sequential timeout-bounded reads
@@ -35,6 +37,7 @@ _poll_thread = None
 _root = None
 _label = None
 _interval_var = None
+_startup_var = None
 _context_menu = None
 # Cached in memory so `_tick` (which runs every WIDGET_TICK_MS) doesn't have to
 # re-read config.json on every tick — only updated (and persisted) when the
@@ -149,6 +152,18 @@ def _on_change_color():
     _label.config(bg=hex_color)
 
 
+def _on_toggle_startup():
+    # The checkbutton has already flipped _startup_var by the time this runs;
+    # apply the new state, and revert the variable if registration fails so
+    # the menu never claims a state that doesn't match the Startup folder.
+    if _startup_var.get():
+        if not startup.register():
+            _startup_var.set(False)
+    else:
+        if not startup.unregister():
+            _startup_var.set(True)
+
+
 def _make_set_interval_handler(minutes):
     def handler():
         config.set_poll_interval(minutes)
@@ -169,6 +184,12 @@ def _build_context_menu(root):
             command=_make_set_interval_handler(minutes),
         )
     menu.add_cascade(label="ポーリング間隔", menu=interval_menu)
+    if os.name == "nt":
+        menu.add_checkbutton(
+            label="Windows起動時に自動起動",
+            variable=_startup_var,
+            command=_on_toggle_startup,
+        )
     menu.add_command(label="背景色を変更", command=_on_change_color)
     menu.add_separator()
     menu.add_command(label="今すぐ更新", command=_on_refresh_now)
@@ -182,6 +203,7 @@ def _show_context_menu(event):
     # approach used elsewhere (avoids re-reading config.json redundantly).
     current_interval = config.load_config()["poll_interval_minutes"]
     _interval_var.set(current_interval)
+    _startup_var.set(startup.is_registered())
     _context_menu.tk_popup(event.x_root, event.y_root)
 
 
@@ -215,11 +237,12 @@ def _create_widget():
 
 
 def main():
-    global _poll_thread, _root, _label, _interval_var, _context_menu, _current_bg_color
+    global _poll_thread, _root, _label, _interval_var, _startup_var, _context_menu, _current_bg_color
 
     _current_bg_color = config.load_config()["background_color"]
     _root, _label = _create_widget()
     _interval_var = tk.IntVar(master=_root)
+    _startup_var = tk.BooleanVar(master=_root, value=startup.is_registered())
     _context_menu = _build_context_menu(_root)
 
     _poll_thread = threading.Thread(target=_poll_loop, daemon=True)
