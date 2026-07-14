@@ -71,3 +71,49 @@ def test_load_config_falls_back_to_default_when_json_is_not_an_object(tmp_path):
     loaded = config.load_config(config_path=str(config_path))
 
     assert loaded["poll_interval_minutes"] == config.DEFAULT_POLL_INTERVAL_MINUTES
+
+
+def test_load_config_includes_default_background_color_when_missing(tmp_path):
+    config_path = tmp_path / "config.json"
+
+    loaded = config.load_config(config_path=str(config_path))
+
+    assert loaded["background_color"] == config.DEFAULT_BACKGROUND_COLOR
+
+
+def test_load_config_reads_existing_background_color(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"background_color": "#336699"}))
+
+    loaded = config.load_config(config_path=str(config_path))
+
+    assert loaded["background_color"] == "#336699"
+
+
+def test_load_config_falls_back_to_default_on_invalid_background_color(tmp_path):
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps({"background_color": "not-a-color"}))
+
+    loaded = config.load_config(config_path=str(config_path))
+
+    assert loaded["background_color"] == config.DEFAULT_BACKGROUND_COLOR
+
+
+def test_set_background_color_persists_value(tmp_path):
+    config_path = tmp_path / "config.json"
+
+    updated = config.set_background_color("#112233", config_path=str(config_path))
+    assert updated["background_color"] == "#112233"
+
+    reloaded = config.load_config(config_path=str(config_path))
+    assert reloaded["background_color"] == "#112233"
+
+
+def test_set_background_color_rejects_invalid_format(tmp_path):
+    config_path = tmp_path / "config.json"
+
+    try:
+        config.set_background_color("blue", config_path=str(config_path))
+        assert False, "expected ValueError"
+    except ValueError:
+        pass

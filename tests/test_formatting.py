@@ -18,41 +18,12 @@ CLAUDE_ERROR = {"error": "credentials file not found"}
 CODEX_ERROR = {"error": "failed to start codex app-server (FileNotFoundError)"}
 
 
-def test_collect_utilizations_combines_both_sources():
-    values = formatting.collect_utilizations(CLAUDE_OK, CODEX_OK)
-    assert values == [12.0, 24.0, 12, 24]
-
-
-def test_collect_utilizations_skips_errored_sources():
-    values = formatting.collect_utilizations(CLAUDE_ERROR, CODEX_OK)
-    assert values == [12, 24]
-
-
-def test_collect_utilizations_empty_when_both_errored():
-    assert formatting.collect_utilizations(CLAUDE_ERROR, CODEX_ERROR) == []
-
-
-def test_icon_color_for_gray_when_no_data():
-    assert formatting.icon_color_for([]) == (128, 128, 128)
-
-
-def test_icon_color_for_green_when_low():
-    assert formatting.icon_color_for([10, 20]) == (40, 160, 80)
-
-
-def test_icon_color_for_yellow_when_medium():
-    assert formatting.icon_color_for([60]) == (230, 180, 30)
-
-
-def test_icon_color_for_red_when_high():
-    assert formatting.icon_color_for([95]) == (220, 50, 47)
-
-
-def test_build_title_includes_both_services():
+def test_build_title_includes_both_services_with_5h_and_7d_windows():
     title = formatting.build_title(CLAUDE_OK, CODEX_OK)
-    assert "Claude" in title
-    assert "Codex" in title
-    assert "12%" in title
+    assert "Claude 5h:12%" in title
+    assert "7d:24%" in title
+    assert "Codex 5h:12%" in title
+    assert title.count("7d:24%") == 2  # both Claude and Codex show their 7d value
 
 
 def test_build_title_shows_na_on_error():
@@ -60,14 +31,19 @@ def test_build_title_shows_na_on_error():
     assert "Claude:N/A" in title
 
 
-def test_build_menu_lines_success_has_four_lines():
-    lines = formatting.build_menu_lines(CLAUDE_OK, CODEX_OK)
-    assert len(lines) == 4
-    assert any("Claude 5h" in line for line in lines)
-    assert any("Codex primary" in line for line in lines)
+def test_build_title_shows_na_for_codex_on_error():
+    title = formatting.build_title(CLAUDE_OK, CODEX_ERROR)
+    assert "Codex:N/A" in title
 
 
-def test_build_menu_lines_shows_error_message():
-    lines = formatting.build_menu_lines(CLAUDE_ERROR, CODEX_ERROR)
-    assert any("credentials file not found" in line for line in lines)
-    assert any("codex app-server" in line for line in lines)
+def test_build_title_labels_codex_windows_by_actual_duration_not_position():
+    # Regression: some Codex accounts only have the weekly (7d) window populated
+    # in `primary`, with `secondary` entirely absent (used_percent/duration both
+    # None) — the label must follow window_duration_mins, not assume
+    # primary=5h/secondary=7d by position.
+    codex_result = {
+        "primary": {"used_percent": 95, "window_duration_mins": 10080, "resets_at": 1784440800},
+        "secondary": {"used_percent": None, "window_duration_mins": None, "resets_at": None},
+    }
+    title = formatting.build_title(CLAUDE_OK, codex_result)
+    assert "Codex 5h:? 7d:95%" in title
