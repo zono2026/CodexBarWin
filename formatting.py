@@ -35,7 +35,10 @@ def build_title(claude_result, codex_result):
     if claude_result and "error" not in claude_result:
         five = claude_result.get("five_hour", {}).get("utilization")
         seven = claude_result.get("seven_day", {}).get("utilization")
-        parts.append(f"Claude 5h:{_fmt_pct(five)} 7d:{_fmt_pct(seven)}")
+        suffix = " (stale)" if claude_result.get("stale") else ""
+        parts.append(f"Claude 5h:{_fmt_pct(five)} 7d:{_fmt_pct(seven)}{suffix}")
+    elif claude_result and claude_result.get("error") == "rate_limited":
+        parts.append("Claude:RATE LIMITED")
     else:
         parts.append("Claude:N/A")
 
