@@ -44,14 +44,15 @@ class ClaudeUsagePoller:
             return self._deferred_result(now)
 
         result = self._fetch_fn()
+        self._next_request_at = now + self._minimum_interval_seconds
+        self._backoff_is_rate_limit = False
+
         if result.get("error") == "rate_limited":
             delay = max(1, int(result["retry_after_seconds"]))
-            self._next_request_at = now + delay
+            self._next_request_at = now + max(self._minimum_interval_seconds, delay)
             self._backoff_is_rate_limit = True
             return self._deferred_result(now)
 
         if "error" not in result:
             self._last_success = result
-            self._next_request_at = now + self._minimum_interval_seconds
-            self._backoff_is_rate_limit = False
         return result

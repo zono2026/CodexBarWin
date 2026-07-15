@@ -76,3 +76,24 @@ def test_non_rate_limit_error_is_not_cached_as_success():
     )
 
     assert poller.fetch() == {"error": "http error 401"}
+
+
+def test_poller_enforces_minimum_interval_after_non_rate_limit_error():
+    results = [{"error": "http error 401"}, SUCCESS]
+    now = [1000.0]
+    poller = ClaudeUsagePoller(
+        fetch_fn=lambda: results.pop(0),
+        time_source=lambda: now[0],
+        minimum_interval_seconds=300,
+    )
+
+    assert poller.fetch() == {"error": "http error 401"}
+    now[0] += 60
+    deferred = poller.fetch()
+
+    assert deferred == {"error": "waiting", "retry_after_seconds": 240}
+    assert results == [SUCCESS]
+
+    now[0] += 240
+    assert poller.fetch() == SUCCESS
+    assert results == []
