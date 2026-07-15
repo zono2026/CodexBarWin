@@ -13,10 +13,19 @@ import urllib.error
 DEFAULT_CREDENTIALS_PATH = os.path.expanduser("~/.claude/.credentials.json")
 USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 REQUEST_TIMEOUT_SECONDS = 5
+DEFAULT_RATE_LIMIT_BACKOFF_SECONDS = 30 * 60
 
 
 class ClaudeUsageError(Exception):
     pass
+
+
+def _retry_after_seconds(headers):
+    try:
+        value = int(headers.get("Retry-After", ""))
+    except (TypeError, ValueError):
+        return DEFAULT_RATE_LIMIT_BACKOFF_SECONDS
+    return value if value > 0 else DEFAULT_RATE_LIMIT_BACKOFF_SECONDS
 
 
 def load_access_token(credentials_path=DEFAULT_CREDENTIALS_PATH):
@@ -70,6 +79,11 @@ def fetch_usage(credentials_path=DEFAULT_CREDENTIALS_PATH, timeout=REQUEST_TIMEO
     try:
         status, body = http_get(USAGE_URL, headers, timeout)
     except urllib.error.HTTPError as e:
+        if e.code == 429:
+            return {
+                "error": "rate_limited",
+                "retry_after_seconds": _retry_after_seconds(e.headers),
+            }
         return {"error": f"http error {e.code}"}
     except Exception as e:
         # Never surface the raw exception message: it may embed request

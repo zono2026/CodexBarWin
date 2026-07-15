@@ -30,7 +30,9 @@ python main.py
 
 ## 既知の制約・リスク
 
-- **Claude側は非公開APIを使用**: `https://api.anthropic.com/api/oauth/usage` はClaude Code本体が `/usage` 表示のために内部で使っているエンドポイントであり、Anthropicが公式にドキュメント化・サポートしているものではない。**予告なく変更・廃止される可能性がある**。取得失敗時はウィジェットに「Claude:N/A」を表示し、アプリはクラッシュしない。
+- **Claude側は非公開APIを使用**: `https://api.anthropic.com/api/oauth/usage` はAnthropicが公式にドキュメント化・サポートしているAPIではなく、予告なく変更・廃止される可能性がある。
+- **Claude取得は通常5分間隔**: 画面の更新間隔が1分でも、Claude APIへのアクセスは5分未満では再送しない。HTTP 429を受信した場合だけ、`Retry-After`に従って指定時間まで自動的に待機する。
+- **表示の意味**: `Claude:RATE LIMITED` はAnthropic側の取得頻度制限、`(stale)` は待機中に最後の正常値を表示している状態、`Claude:N/A` は認証・通信・応答形式などその他の取得失敗を示す。
 - **Claudeの認証トークン失効時は自動リフレッシュしない**: `~/.claude/.credentials.json` のアクセストークンをそのまま使う。Claude Codeを定期的に使っていればトークンは自動更新されるが、長期間Claude Codeを起動しない場合はトークンが失効し「Claude: N/A」表示になることがある。
 - **Codex側は公式API**: `codex app-server` の `account/rateLimits/read` はOpenAIがオープンソースで公開しているJSON-RPC APIであり、比較的安定して利用できる想定。
 - 認証情報（アクセストークン・リフレッシュトークン）は、ログ・エラーメッセージ・トレイ表示のいずれにも一切出力しない設計になっている。
