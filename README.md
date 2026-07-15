@@ -6,6 +6,8 @@
 
 ## セットアップ
 
+![License](https://img.shields.io/github/license/zono2026/CodexBarWin) ![Python](https://img.shields.io/badge/python-3.x-blue) ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
+
 ```
 pip install -r requirements.txt
 python main.py
@@ -31,3 +33,9 @@ python main.py
 - **Claudeの認証トークン失効時は自動リフレッシュしない**: `~/.claude/.credentials.json` のアクセストークンをそのまま使う。Claude Codeを定期的に使っていればトークンは自動更新されるが、長期間Claude Codeを起動しない場合はトークンが失効し「Claude: N/A」表示になることがある。
 - **Codex側は公式API**: `codex app-server` の `account/rateLimits/read` はOpenAIがオープンソースで公開しているJSON-RPC APIであり、比較的安定して利用できる想定。
 - 認証情報（アクセストークン・リフレッシュトークン）は、ログ・エラーメッセージ・トレイ表示のいずれにも一切出力しない設計になっている。
+
+
+## 解説記事
+
+- [Zenn: Claude Code / Codex CLIの残り使用量を常時表示するWindowsウィジェットを作った](https://zenn.dev/zono2026/articles/dadfaa2255e99e)
+- - [Qiita: Claude Code / Codex CLIの残り使用量を常時表示するWindowsウィジェットを作った](https://qiita.com/zono2026/items/b17073fa7ceda5512ff9)
