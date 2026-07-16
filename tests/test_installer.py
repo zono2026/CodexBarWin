@@ -41,13 +41,104 @@ def run_script(script_name, *arguments, env=None):
     )
 
 
+# WScript.Shell's CreateShortcut() marshals shortcut properties through the
+# process's ANSI codepage ("Language for non-Unicode programs"). On an
+# English-locale host that codepage cannot represent Japanese characters, so
+# reading a shortcut this way is not a reliable way to verify install.ps1's
+# Unicode-safe output. This helper reads the .lnk file through the same
+# wide-character IShellLinkW/IPersistFile COM interfaces install.ps1 uses to
+# write it, so verification is not itself subject to the ANSI codepage bug
+# it is trying to catch.
+_SHORTCUT_READER_TYPE_DEFINITION = """
+using System;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+using System.Text;
+
+namespace CodexBarWinTest
+{
+    [ComImport]
+    [Guid("00021401-0000-0000-C000-000000000046")]
+    internal class ShellLinkCoClass
+    {
+    }
+
+    [ComImport]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    [Guid("000214F9-0000-0000-C000-000000000046")]
+    internal interface IShellLinkW
+    {
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszFile, int cchMaxPath, IntPtr pfd, uint fFlags);
+        void GetIDList(out IntPtr ppidl);
+        void SetIDList(IntPtr pidl);
+        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszName, int cchMaxName);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string pszName);
+        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszDir, int cchMaxPath);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string pszDir);
+        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszArgs, int cchMaxPath);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string pszArgs);
+        void GetHotkey(out short pwHotkey);
+        void SetHotkey(short wHotkey);
+        void GetShowCmd(out int piShowCmd);
+        void SetShowCmd(int iShowCmd);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder pszIconPath, int cchIconPath, out int piIcon);
+        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string pszIconPath, int iIcon);
+        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string pszPathRel, uint dwReserved);
+        void Resolve(IntPtr hwnd, uint fFlags);
+        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string pszFile);
+    }
+
+    public class ShortcutInfo
+    {
+        public string TargetPath { get; set; }
+        public string Arguments { get; set; }
+        public string WorkingDirectory { get; set; }
+    }
+
+    public static class UnicodeShortcutReader
+    {
+        public static ShortcutInfo Read(string shortcutPath)
+        {
+            ShellLinkCoClass raw = new ShellLinkCoClass();
+            try
+            {
+                IPersistFile persistFile = (IPersistFile)raw;
+                persistFile.Load(shortcutPath, 0);
+
+                IShellLinkW link = (IShellLinkW)raw;
+                StringBuilder targetBuilder = new StringBuilder(2048);
+                link.GetPath(targetBuilder, targetBuilder.Capacity, IntPtr.Zero, 0);
+
+                StringBuilder argumentsBuilder = new StringBuilder(2048);
+                link.GetArguments(argumentsBuilder, argumentsBuilder.Capacity);
+
+                StringBuilder workingDirectoryBuilder = new StringBuilder(2048);
+                link.GetWorkingDirectory(workingDirectoryBuilder, workingDirectoryBuilder.Capacity);
+
+                ShortcutInfo info = new ShortcutInfo();
+                info.TargetPath = targetBuilder.ToString();
+                info.Arguments = argumentsBuilder.ToString();
+                info.WorkingDirectory = workingDirectoryBuilder.ToString();
+                return info;
+            }
+            finally
+            {
+                Marshal.FinalReleaseComObject(raw);
+            }
+        }
+    }
+}
+"""
+
+
 def read_shortcut(shortcut_path):
     command = (
-        "[Console]::OutputEncoding=[Text.Encoding]::UTF8;"
-        "$ws=New-Object -ComObject WScript.Shell;"
-        f"$sc=$ws.CreateShortcut('{shortcut_path}');"
-        "[pscustomobject]@{TargetPath=$sc.TargetPath;Arguments=$sc.Arguments;"
-        "WorkingDirectory=$sc.WorkingDirectory}|ConvertTo-Json -Compress"
+        "[Console]::OutputEncoding=[Text.Encoding]::UTF8\n"
+        "Add-Type -TypeDefinition @'\n"
+        + _SHORTCUT_READER_TYPE_DEFINITION.strip("\n")
+        + "\n'@ -Language CSharp\n"
+        f"$info = [CodexBarWinTest.UnicodeShortcutReader]::Read('{shortcut_path}')\n"
+        "$info | ConvertTo-Json -Compress\n"
     )
     completed = subprocess.run(
         [POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", command],
