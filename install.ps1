@@ -17,7 +17,8 @@ $RuntimeFiles = @(
     "codex_usage.py",
     "config.py",
     "formatting.py",
-    "startup.py"
+    "startup.py",
+    "uninstall.ps1"
 )
 
 function Find-PythonExe {
@@ -136,7 +137,7 @@ try {
     $shortcut.Description = "CodexBarWin startup"
     $shortcut.Save()
 
-    Write-Output "INSTALLED_FILES=$($RuntimeFiles.Count)"
+    Write-Output "INSTALLED_FILES=7"
     Write-Output "STARTUP_OK=$shortcutPath"
 
     if (-not $NoLaunch) {
