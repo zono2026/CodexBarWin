@@ -78,6 +78,7 @@ def test_install_copies_runtime_preserves_config_and_creates_fixed_shortcut(tmp_
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert all((install_dir / name).is_file() for name in RUNTIME_FILES)
+    assert (install_dir / "uninstall.ps1").is_file()
     assert config_path.read_text(encoding="utf-8") == '{"background_color":"#123456"}'
 
     shortcut = read_shortcut(startup_dir / "CodexBarWin.lnk")
@@ -158,3 +159,89 @@ def test_install_reports_diagnostics_and_is_idempotent(tmp_path):
         "STARTUP_OK=",
     ):
         assert status in second.stdout
+
+
+def install_for_uninstall_test(tmp_path):
+    install_dir = tmp_path / "installed"
+    startup_dir = tmp_path / "startup"
+    completed = run_script(
+        "install.ps1",
+        "-SourceDir",
+        ROOT,
+        "-InstallDir",
+        install_dir,
+        "-StartupDir",
+        startup_dir,
+        "-PythonExe",
+        sys.executable,
+        "-NoLaunch",
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    return install_dir, startup_dir
+
+
+def test_uninstall_removes_runtime_and_matching_shortcut_but_preserves_config(tmp_path):
+    install_dir, startup_dir = install_for_uninstall_test(tmp_path)
+    config_path = install_dir / "config.json"
+    config_path.write_text('{"background_color":"#abcdef"}', encoding="utf-8")
+
+    completed = run_script(
+        "uninstall.ps1",
+        "-InstallDir",
+        install_dir,
+        "-StartupDir",
+        startup_dir,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert not (startup_dir / "CodexBarWin.lnk").exists()
+    assert all(not (install_dir / name).exists() for name in RUNTIME_FILES)
+    assert config_path.read_text(encoding="utf-8") == '{"background_color":"#abcdef"}'
+
+
+def test_uninstall_remove_config_deletes_install_directory(tmp_path):
+    install_dir, startup_dir = install_for_uninstall_test(tmp_path)
+    (install_dir / "config.json").write_text("{}", encoding="utf-8")
+
+    completed = run_script(
+        "uninstall.ps1",
+        "-InstallDir",
+        install_dir,
+        "-StartupDir",
+        startup_dir,
+        "-RemoveConfig",
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert not install_dir.exists()
+
+
+def test_uninstall_keeps_unrelated_shortcut_with_same_name(tmp_path):
+    install_dir = tmp_path / "installed"
+    startup_dir = tmp_path / "startup"
+    install_dir.mkdir()
+    startup_dir.mkdir()
+    shortcut_path = startup_dir / "CodexBarWin.lnk"
+    command = (
+        "$ws=New-Object -ComObject WScript.Shell;"
+        f"$sc=$ws.CreateShortcut('{shortcut_path}');"
+        "$sc.TargetPath=$env:ComSpec;"
+        "$sc.Arguments='/c exit 0';"
+        f"$sc.WorkingDirectory='{tmp_path}';"
+        "$sc.Save()"
+    )
+    subprocess.run(
+        [POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", command],
+        check=True,
+    )
+
+    completed = run_script(
+        "uninstall.ps1",
+        "-InstallDir",
+        install_dir,
+        "-StartupDir",
+        startup_dir,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert shortcut_path.exists()
