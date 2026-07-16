@@ -110,3 +110,51 @@ def test_install_rejects_python_without_tkinter(tmp_path):
     assert completed.returncode != 0
     assert "tkinter" in (completed.stdout + completed.stderr).lower()
     assert not (tmp_path / "installed" / "main.py").exists()
+
+
+def test_install_reports_diagnostics_and_is_idempotent(tmp_path):
+    install_dir = tmp_path / "installed"
+    startup_dir = tmp_path / "startup"
+
+    first = run_script(
+        "install.ps1",
+        "-SourceDir",
+        ROOT,
+        "-InstallDir",
+        install_dir,
+        "-StartupDir",
+        startup_dir,
+        "-PythonExe",
+        sys.executable,
+        "-NoLaunch",
+    )
+    assert first.returncode == 0, first.stdout + first.stderr
+
+    config_path = install_dir / "config.json"
+    config_path.write_text('{"poll_interval_minutes":15}', encoding="utf-8")
+    second = run_script(
+        "install.ps1",
+        "-SourceDir",
+        ROOT,
+        "-InstallDir",
+        install_dir,
+        "-StartupDir",
+        startup_dir,
+        "-PythonExe",
+        sys.executable,
+        "-NoLaunch",
+    )
+
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert config_path.read_text(encoding="utf-8") == '{"poll_interval_minutes":15}'
+    for status in (
+        "PYTHON_OK=",
+        "TKINTER_OK=",
+        "PYTHONW_OK=",
+        "CODEX_CLI=",
+        "CODEX_AUTH=",
+        "CLAUDE_AUTH=",
+        "INSTALLED_FILES=7",
+        "STARTUP_OK=",
+    ):
+        assert status in second.stdout
