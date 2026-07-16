@@ -43,6 +43,7 @@ def run_script(script_name, *arguments, env=None):
 
 def read_shortcut(shortcut_path):
     command = (
+        "[Console]::OutputEncoding=[Text.Encoding]::UTF8;"
         "$ws=New-Object -ComObject WScript.Shell;"
         f"$sc=$ws.CreateShortcut('{shortcut_path}');"
         "[pscustomobject]@{TargetPath=$sc.TargetPath;Arguments=$sc.Arguments;"
@@ -52,7 +53,8 @@ def read_shortcut(shortcut_path):
         [POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", command],
         capture_output=True,
         text=True,
-        errors="replace",
+        encoding="utf-8",
+        errors="strict",
         check=True,
     )
     return json.loads(completed.stdout)
@@ -109,6 +111,42 @@ def test_install_rejects_python_without_tkinter(tmp_path):
         "-PythonExe",
         fake_python,
         "-NoLaunch",
+    )
+
+    assert completed.returncode != 0
+    assert "tkinter" in (completed.stdout + completed.stderr).lower()
+    assert not (tmp_path / "installed" / "main.py").exists()
+
+
+def test_install_rejects_python_when_pythonw_tkinter_check_fails(tmp_path):
+    pythonw = Path(sys.executable).with_name("pythonw.exe")
+    if not pythonw.is_file():
+        pytest.skip("test runner Python has no pythonw.exe")
+
+    shadow_modules = tmp_path / "shadow-modules"
+    shadow_modules.mkdir()
+    (shadow_modules / "tkinter.py").write_text(
+        "import pathlib, sys\n"
+        "if pathlib.Path(sys.executable).name.casefold() == 'pythonw.exe':\n"
+        "    raise ImportError('pythonw tkinter failure')\n"
+        "TkVersion = 8.6\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(shadow_modules)
+
+    completed = run_script(
+        "install.ps1",
+        "-SourceDir",
+        ROOT,
+        "-InstallDir",
+        tmp_path / "installed",
+        "-StartupDir",
+        tmp_path / "startup",
+        "-PythonExe",
+        sys.executable,
+        "-NoLaunch",
+        env=env,
     )
 
     assert completed.returncode != 0
@@ -196,6 +234,48 @@ def test_auto_discovery_prefers_direct_user_python_over_windowsapps_alias(tmp_pa
     ).casefold()
 
 
+def test_auto_discovery_skips_windowsapps_alias_and_uses_next_path_python(tmp_path):
+    valid_python = Path(sys.executable)
+    valid_pythonw = valid_python.with_name("pythonw.exe")
+    if not valid_pythonw.is_file():
+        pytest.skip("test runner Python has no pythonw.exe")
+
+    fake_local_app_data = tmp_path / "local-app-data"
+    windows_apps = fake_local_app_data / "Microsoft" / "WindowsApps"
+    windows_apps.mkdir(parents=True)
+    where = Path(os.environ["SystemRoot"]) / "System32" / "where.exe"
+    shutil.copy2(where, windows_apps / "python.exe")
+    shutil.copy2(where, windows_apps / "pythonw.exe")
+
+    install_dir = tmp_path / "installed"
+    startup_dir = tmp_path / "startup"
+    env = os.environ.copy()
+    env["LOCALAPPDATA"] = str(fake_local_app_data)
+    env["PATH"] = (
+        str(windows_apps)
+        + os.pathsep
+        + str(valid_python.parent)
+        + os.pathsep
+        + env.get("PATH", "")
+    )
+
+    completed = run_script(
+        "install.ps1",
+        "-SourceDir",
+        ROOT,
+        "-InstallDir",
+        install_dir,
+        "-StartupDir",
+        startup_dir,
+        "-NoLaunch",
+        env=env,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    shortcut = read_shortcut(startup_dir / "CodexBarWin.lnk")
+    assert shortcut["TargetPath"].casefold() == str(valid_pythonw).casefold()
+
+
 def test_auto_discovery_skips_candidate_without_pythonw(tmp_path):
     valid_python = Path(sys.executable)
     valid_pythonw = valid_python.with_name("pythonw.exe")
@@ -233,6 +313,69 @@ def test_auto_discovery_skips_candidate_without_pythonw(tmp_path):
     assert shortcut["TargetPath"].casefold() != str(
         incomplete_python.with_name("pythonw.exe")
     ).casefold()
+
+
+def test_auto_discovery_skips_candidate_with_unusable_pythonw(tmp_path):
+    valid_python = Path(sys.executable)
+    valid_pythonw = valid_python.with_name("pythonw.exe")
+    if not valid_pythonw.is_file():
+        pytest.skip("test runner Python has no pythonw.exe")
+
+    fake_local_app_data = tmp_path / "local-app-data"
+    broken_python_dir = fake_local_app_data / "Python" / "pythoncore-99.0-64"
+    broken_python_dir.mkdir(parents=True)
+    shutil.copy2(valid_python, broken_python_dir / "python.exe")
+    where = Path(os.environ["SystemRoot"]) / "System32" / "where.exe"
+    shutil.copy2(where, broken_python_dir / "pythonw.exe")
+
+    install_dir = tmp_path / "installed"
+    startup_dir = tmp_path / "startup"
+    env = os.environ.copy()
+    env["LOCALAPPDATA"] = str(fake_local_app_data)
+    env["PATH"] = str(valid_python.parent) + os.pathsep + env.get("PATH", "")
+
+    completed = run_script(
+        "install.ps1",
+        "-SourceDir",
+        ROOT,
+        "-InstallDir",
+        install_dir,
+        "-StartupDir",
+        startup_dir,
+        "-NoLaunch",
+        env=env,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    shortcut = read_shortcut(startup_dir / "CodexBarWin.lnk")
+    assert shortcut["TargetPath"].casefold() == str(valid_pythonw).casefold()
+
+
+def test_install_supports_spaces_and_non_ascii_characters_in_paths(tmp_path):
+    source_dir = tmp_path / "source 日本語"
+    install_dir = tmp_path / "installed 日本語"
+    startup_dir = tmp_path / "startup 日本語"
+    source_dir.mkdir()
+    for name in (*RUNTIME_FILES, "uninstall.ps1"):
+        shutil.copy2(ROOT / name, source_dir / name)
+
+    completed = run_script(
+        "install.ps1",
+        "-SourceDir",
+        source_dir,
+        "-InstallDir",
+        install_dir,
+        "-StartupDir",
+        startup_dir,
+        "-PythonExe",
+        sys.executable,
+        "-NoLaunch",
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    shortcut = read_shortcut(startup_dir / "CodexBarWin.lnk")
+    assert shortcut["Arguments"] == f'"{install_dir / "main.py"}"'
+    assert shortcut["WorkingDirectory"].casefold() == str(install_dir).casefold()
 
 
 def install_for_uninstall_test(tmp_path):

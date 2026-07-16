@@ -33,9 +33,9 @@ function Find-PythonExe {
         $candidates += Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA "Programs\Python\Python*\python.exe") -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime -Descending |
             ForEach-Object { $_.FullName }
-        $command = Get-Command python.exe -ErrorAction SilentlyContinue
-        if ($command) {
-            $candidates += $command.Source
+        $commands = Get-Command python.exe -All -ErrorAction SilentlyContinue
+        if ($commands) {
+            $candidates += $commands | ForEach-Object { $_.Source }
         }
     }
 
@@ -43,17 +43,30 @@ function Find-PythonExe {
         if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
             continue
         }
+        if ($candidate.IndexOf("\Microsoft\WindowsApps\", [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            continue
+        }
         $pythonw = Join-Path (Split-Path -Parent $candidate) "pythonw.exe"
         if (-not (Test-Path -LiteralPath $pythonw -PathType Leaf)) {
             continue
         }
         $tkVersion = & $candidate -c "import tkinter; print(tkinter.TkVersion)" 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            return [pscustomobject]@{
-                Python = $candidate
-                Pythonw = $pythonw
-                TkVersion = (($tkVersion | Select-Object -First 1) -as [string]).Trim()
-            }
+        if ($LASTEXITCODE -ne 0) {
+            continue
+        }
+        try {
+            $pythonwCheck = Start-Process -FilePath $pythonw -ArgumentList '-c "import tkinter"' -Wait -PassThru
+        }
+        catch {
+            continue
+        }
+        if ($pythonwCheck.ExitCode -ne 0) {
+            continue
+        }
+        return [pscustomobject]@{
+            Python = $candidate
+            Pythonw = $pythonw
+            TkVersion = (($tkVersion | Select-Object -First 1) -as [string]).Trim()
         }
     }
 
