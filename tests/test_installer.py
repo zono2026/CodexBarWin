@@ -245,3 +245,21 @@ def test_uninstall_keeps_unrelated_shortcut_with_same_name(tmp_path):
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert shortcut_path.exists()
+
+
+def test_readme_documents_public_install_update_and_uninstall():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    for required_text in (
+        "install.ps1",
+        "%LOCALAPPDATA%\\CodexBarWin",
+        "PowerShell",
+        "tkinter",
+        "Codex CLI",
+        "再インストール",
+        "config.json",
+        "uninstall.ps1",
+        "-RemoveConfig",
+        "非公開API",
+    ):
+        assert required_text in readme

@@ -4,9 +4,64 @@
 
 ![ウィジェット表示例](docs/screenshot.png)
 
-## セットアップ
+## 必要環境
 
 ![License](https://img.shields.io/github/license/zono2026/CodexBarWin) ![Python](https://img.shields.io/badge/python-3.x-blue) ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
+
+必須:
+
+- Windows 10またはWindows 11
+- `tkinter`と`pythonw.exe`を含む通常版Python 3
+- Windows PowerShell 5.1以降
+
+使用量を取得するサービスごとに、次の準備も必要です。未準備のサービスは`N/A`表示になりますが、インストール自体は続行できます。
+
+- Codex: Codex CLIをインストールし、`codex`をPATHから実行できる状態でログイン
+- Claude: Claude Codeでログインし、`~/.claude/.credentials.json`が存在する状態
+
+## 推奨インストール
+
+ZIPを任意の場所へ展開するかリポジトリをcloneし、そのフォルダでPowerShellを開いて実行します。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+`-ExecutionPolicy Bypass`はこのPowerShellプロセスだけに適用され、PC全体の設定は変更しません。ダウンロードしたスクリプトがWindowsにブロックされた場合は、実行前に内容と取得元を確認してからファイルのプロパティでブロックを解除してください。
+
+インストーラーは次を実行します。
+
+- Python、`tkinter`、`pythonw.exe`を確認（不足時はインストールを中止）
+- Codex CLI、Codex認証、Claude認証を診断（不足時は警告）
+- 実行ファイルを`%LOCALAPPDATA%\CodexBarWin`へ固定配置
+- 固定配置先を指すStartupショートカットを作成
+- インストール完了後にウィジェットを起動
+
+診断結果に`WARN`があっても、該当サービスが`N/A`になるだけでウィジェットは利用できます。認証トークンの内容は表示しません。
+
+### 更新・再インストール
+
+新しいZIPまたはclone先で`install.ps1`を再実行してください。固定配置したプログラムだけを上書きし、背景色やポーリング間隔を保存した`config.json`は保持します。
+
+### アンインストール
+
+通常のアンインストールでは設定を保持します。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\CodexBarWin\uninstall.ps1"
+```
+
+設定も含めて削除する場合は`-RemoveConfig`を付けます。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\CodexBarWin\uninstall.ps1" -RemoveConfig
+```
+
+アンインストーラーは、固定配置した`main.py`を参照するプロセスとStartupショートカットだけを対象にします。同名でも別の場所を指すショートカットは削除しません。
+
+## 開発者向け直接実行
+
+リポジトリから直接起動する場合は次を実行します。この方法で自動起動を登録すると現在のリポジトリ場所が固定されるため、一般利用には推奨インストールを使用してください。
 
 ```
 pip install -r requirements.txt
