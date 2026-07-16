@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import sys
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parent.parent
 POWERSHELL = shutil.which("powershell") or "powershell"
@@ -159,6 +161,38 @@ def test_install_reports_diagnostics_and_is_idempotent(tmp_path):
         "STARTUP_OK=",
     ):
         assert status in second.stdout
+
+
+def test_auto_discovery_prefers_direct_user_python_over_windowsapps_alias(tmp_path):
+    direct_python = Path(sys.executable)
+    local_app_data = Path(os.environ["LOCALAPPDATA"])
+    supported_roots = (
+        local_app_data / "Python",
+        local_app_data / "Programs" / "Python",
+    )
+    if not any(root in direct_python.parents for root in supported_roots):
+        pytest.skip("test runner is not using a direct per-user Python installation")
+    if not direct_python.with_name("pythonw.exe").is_file():
+        pytest.skip("test runner Python has no pythonw.exe")
+
+    install_dir = tmp_path / "installed"
+    startup_dir = tmp_path / "startup"
+    completed = run_script(
+        "install.ps1",
+        "-SourceDir",
+        ROOT,
+        "-InstallDir",
+        install_dir,
+        "-StartupDir",
+        startup_dir,
+        "-NoLaunch",
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    shortcut = read_shortcut(startup_dir / "CodexBarWin.lnk")
+    assert shortcut["TargetPath"].casefold() == str(
+        direct_python.with_name("pythonw.exe")
+    ).casefold()
 
 
 def install_for_uninstall_test(tmp_path):
