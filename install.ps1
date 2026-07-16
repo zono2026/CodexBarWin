@@ -27,16 +27,16 @@ function Find-PythonExe {
         $candidates += $PythonExe
     }
     else {
+        $candidates += Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA "Python\pythoncore-*\python.exe") -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
+            ForEach-Object { $_.FullName }
+        $candidates += Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA "Programs\Python\Python*\python.exe") -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
+            ForEach-Object { $_.FullName }
         $command = Get-Command python.exe -ErrorAction SilentlyContinue
         if ($command) {
             $candidates += $command.Source
         }
-        $candidates += Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA "Python\pythoncore-*\python.exe") -ErrorAction SilentlyContinue |
-            Sort-Object FullName -Descending |
-            ForEach-Object { $_.FullName }
-        $candidates += Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA "Programs\Python\Python*\python.exe") -ErrorAction SilentlyContinue |
-            Sort-Object FullName -Descending |
-            ForEach-Object { $_.FullName }
     }
 
     foreach ($candidate in $candidates | Select-Object -Unique) {
