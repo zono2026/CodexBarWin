@@ -21,7 +21,7 @@ RUNTIME_FILES = (
 )
 
 
-def run_script(script_name, *arguments):
+def run_script(script_name, *arguments, env=None):
     return subprocess.run(
         [
             POWERSHELL,
@@ -37,6 +37,7 @@ def run_script(script_name, *arguments):
         capture_output=True,
         text=True,
         errors="replace",
+        env=env,
     )
 
 
@@ -192,6 +193,45 @@ def test_auto_discovery_prefers_direct_user_python_over_windowsapps_alias(tmp_pa
     shortcut = read_shortcut(startup_dir / "CodexBarWin.lnk")
     assert shortcut["TargetPath"].casefold() == str(
         direct_python.with_name("pythonw.exe")
+    ).casefold()
+
+
+def test_auto_discovery_skips_candidate_without_pythonw(tmp_path):
+    valid_python = Path(sys.executable)
+    valid_pythonw = valid_python.with_name("pythonw.exe")
+    if not valid_pythonw.is_file():
+        pytest.skip("test runner Python has no pythonw.exe")
+
+    fake_local_app_data = tmp_path / "local-app-data"
+    incomplete_python_dir = fake_local_app_data / "Python" / "pythoncore-99.0-64"
+    incomplete_python_dir.mkdir(parents=True)
+    incomplete_python = incomplete_python_dir / "python.exe"
+    shutil.copy2(valid_python, incomplete_python)
+    assert not incomplete_python.with_name("pythonw.exe").exists()
+
+    install_dir = tmp_path / "installed"
+    startup_dir = tmp_path / "startup"
+    env = os.environ.copy()
+    env["LOCALAPPDATA"] = str(fake_local_app_data)
+    env["PATH"] = str(valid_python.parent) + os.pathsep + env.get("PATH", "")
+
+    completed = run_script(
+        "install.ps1",
+        "-SourceDir",
+        ROOT,
+        "-InstallDir",
+        install_dir,
+        "-StartupDir",
+        startup_dir,
+        "-NoLaunch",
+        env=env,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    shortcut = read_shortcut(startup_dir / "CodexBarWin.lnk")
+    assert shortcut["TargetPath"].casefold() == str(valid_pythonw).casefold()
+    assert shortcut["TargetPath"].casefold() != str(
+        incomplete_python.with_name("pythonw.exe")
     ).casefold()
 
 
