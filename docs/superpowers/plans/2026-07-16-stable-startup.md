@@ -16,13 +16,13 @@
 - Read: `C:\Users\OSKCLT4740\AppData\Local\Python\pythoncore-3.14-64\python.exe`
 - Read: `C:\Users\OSKCLT4740\Documents\Codex\2026-07-15\mjfaccin-codex-text-link-https-www\work\CodexBarWin\*.py`
 
-- [ ] **Step 1: Verify Python and tkinter**
+- [x] **Step 1: Verify Python and tkinter**
 
 Run the fixed Python executable with `import tkinter` and print `tkinter.TkVersion`.
 
 Expected: exit code 0 and Tk version 8.6.
 
-- [ ] **Step 2: Verify all runtime source files exist**
+- [x] **Step 2: Verify all runtime source files exist**
 
 Check `main.py`, `claude_polling.py`, `claude_usage.py`, `codex_usage.py`, `config.py`, `formatting.py`, and `startup.py`.
 
@@ -40,19 +40,19 @@ Expected: all seven paths exist.
 - Create: `C:\Users\OSKCLT4740\AppData\Local\CodexBarWin\startup.py`
 - Create or preserve: `C:\Users\OSKCLT4740\AppData\Local\CodexBarWin\config.json`
 
-- [ ] **Step 1: Create the fixed installation directory**
+- [x] **Step 1: Create the fixed installation directory**
 
 Create the directory if it does not already exist. Do not remove existing files.
 
-- [ ] **Step 2: Copy runtime modules**
+- [x] **Step 2: Copy runtime modules**
 
 Copy the seven required Python files from the worktree, overwriting older installed copies.
 
-- [ ] **Step 3: Preserve configuration**
+- [x] **Step 3: Preserve configuration**
 
 If the fixed directory has no `config.json`, copy the source worktree's current `config.json`. If it already exists, leave it unchanged.
 
-- [ ] **Step 4: Compile-check the installed application**
+- [x] **Step 4: Compile-check the installed application**
 
 Run Python 3.14 `-m py_compile` against all seven installed modules.
 
@@ -63,15 +63,15 @@ Expected: exit code 0.
 **Files:**
 - Modify: `C:\Users\OSKCLT4740\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\CodexBarWin.lnk`
 
-- [ ] **Step 1: Read and retain the current shortcut fields for rollback**
+- [x] **Step 1: Read and retain the current shortcut fields for rollback**
 
 Read `TargetPath`, `Arguments`, and `WorkingDirectory` through `WScript.Shell` before overwriting them.
 
-- [ ] **Step 2: Save stable shortcut fields**
+- [x] **Step 2: Save stable shortcut fields**
 
 Set target to `C:\Users\OSKCLT4740\AppData\Local\Python\pythoncore-3.14-64\pythonw.exe`, arguments to the quoted fixed `main.py`, and working directory to `C:\Users\OSKCLT4740\AppData\Local\CodexBarWin`.
 
-- [ ] **Step 3: Re-read and validate the shortcut**
+- [x] **Step 3: Re-read and validate the shortcut**
 
 Expected: no field contains `.cache\codex-runtimes` or `Documents\Codex\2026-`.
 
@@ -80,21 +80,21 @@ Expected: no field contains `.cache\codex-runtimes` or `Documents\Codex\2026-`.
 **Files:**
 - Read: installed runtime and Startup shortcut from Tasks 2 and 3
 
-- [ ] **Step 1: Stop only the prior CodexBarWin Python process**
+- [x] **Step 1: Stop only the prior CodexBarWin Python process**
 
 Identify the process by command line containing the old dated `CodexBarWin\main.py` path, then stop only that PID.
 
-- [ ] **Step 2: Launch the Startup shortcut programmatically**
+- [x] **Step 2: Launch the Startup shortcut programmatically**
 
 Use `Start-Process` on `CodexBarWin.lnk`; do not capture the screen or automate clicks.
 
-- [ ] **Step 3: Verify the stable process remains alive**
+- [x] **Step 3: Verify the stable process remains alive**
 
 After three seconds, query process command lines and require one `pythonw.exe` process whose command line contains `C:\Users\OSKCLT4740\AppData\Local\CodexBarWin\main.py`.
 
 Expected: one matching live process and no dependency on a Codex cache or dated work folder.
 
-- [ ] **Step 4: Run the project tests**
+- [x] **Step 4: Run the project tests**
 
 Run the repository test suite using Python 3.14.
 
