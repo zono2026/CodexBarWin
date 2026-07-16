@@ -1,0 +1,112 @@
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+
+ROOT = Path(__file__).resolve().parent.parent
+POWERSHELL = shutil.which("powershell") or "powershell"
+RUNTIME_FILES = (
+    "main.py",
+    "claude_polling.py",
+    "claude_usage.py",
+    "codex_usage.py",
+    "config.py",
+    "formatting.py",
+    "startup.py",
+)
+
+
+def run_script(script_name, *arguments):
+    return subprocess.run(
+        [
+            POWERSHELL,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(ROOT / script_name),
+            *map(str, arguments),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        errors="replace",
+    )
+
+
+def read_shortcut(shortcut_path):
+    command = (
+        "$ws=New-Object -ComObject WScript.Shell;"
+        f"$sc=$ws.CreateShortcut('{shortcut_path}');"
+        "[pscustomobject]@{TargetPath=$sc.TargetPath;Arguments=$sc.Arguments;"
+        "WorkingDirectory=$sc.WorkingDirectory}|ConvertTo-Json -Compress"
+    )
+    completed = subprocess.run(
+        [POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", command],
+        capture_output=True,
+        text=True,
+        errors="replace",
+        check=True,
+    )
+    return json.loads(completed.stdout)
+
+
+def test_install_copies_runtime_preserves_config_and_creates_fixed_shortcut(tmp_path):
+    install_dir = tmp_path / "installed"
+    startup_dir = tmp_path / "startup"
+    install_dir.mkdir()
+    startup_dir.mkdir()
+    config_path = install_dir / "config.json"
+    config_path.write_text('{"background_color":"#123456"}', encoding="utf-8")
+
+    completed = run_script(
+        "install.ps1",
+        "-SourceDir",
+        ROOT,
+        "-InstallDir",
+        install_dir,
+        "-StartupDir",
+        startup_dir,
+        "-PythonExe",
+        sys.executable,
+        "-NoLaunch",
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert all((install_dir / name).is_file() for name in RUNTIME_FILES)
+    assert config_path.read_text(encoding="utf-8") == '{"background_color":"#123456"}'
+
+    shortcut = read_shortcut(startup_dir / "CodexBarWin.lnk")
+    expected_pythonw = str(Path(sys.executable).with_name("pythonw.exe"))
+    assert shortcut["TargetPath"].casefold() == expected_pythonw.casefold()
+    assert shortcut["Arguments"] == f'"{install_dir / "main.py"}"'
+    assert shortcut["WorkingDirectory"].casefold() == str(install_dir).casefold()
+
+
+def test_install_rejects_python_without_tkinter(tmp_path):
+    fake_python = tmp_path / "python.exe"
+    fake_pythonw = tmp_path / "pythonw.exe"
+    where = Path(os.environ["SystemRoot"]) / "System32" / "where.exe"
+    shutil.copy2(where, fake_python)
+    shutil.copy2(where, fake_pythonw)
+
+    completed = run_script(
+        "install.ps1",
+        "-SourceDir",
+        ROOT,
+        "-InstallDir",
+        tmp_path / "installed",
+        "-StartupDir",
+        tmp_path / "startup",
+        "-PythonExe",
+        fake_python,
+        "-NoLaunch",
+    )
+
+    assert completed.returncode != 0
+    assert "tkinter" in (completed.stdout + completed.stderr).lower()
+    assert not (tmp_path / "installed" / "main.py").exists()
