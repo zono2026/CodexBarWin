@@ -77,8 +77,9 @@ python main.py
 - ウィジェットを**右クリック**するとメニューが出る:
   - 「ポーリング間隔」: 1分/5分/15分を切り替え
   - 「Windows起動時に自動起動」: チェックを入れるとスタートアップフォルダにショートカットを作成し、Windowsログオン時に自動起動する（チェックを外すと解除）
+  - 「状態・エラー詳細」: Claude/Codexそれぞれの状態（正常/エラー/未取得）、固定の安全なエラー概要、最終成功時刻を表示するウィンドウを開く。生のエラー文・トークン・パスは表示されない（許可リスト方式で固定メッセージに分類）。ウィンドウを開いている間は自動的に最新状態へ更新される
   - 「背景色を変更」: カラーピッカーで背景色を選択（設定は保持される）
-  - - 「今すぐ更新」: 即座に再取得
+  - 「今すぐ更新」: 即座に再取得
   - 「終了」: アプリを終了
 - **Claude**: 5時間枠 / 週間枠の利用率（`GET /api/oauth/usage` から取得）
 - **Codex**: primary / secondary 枠の利用率（`codex app-server` の `account/rateLimits/read` から取得）
@@ -96,4 +97,4 @@ python main.py
 ## 解説記事
 
 - [Zenn: Claude Code / Codex CLIの残り使用量を常時表示するWindowsウィジェットを作った](https://zenn.dev/zono2026/articles/dadfaa2255e99e)
-- - [Qiita: Claude Code / Codex CLIの残り使用量を常時表示するWindowsウィジェットを作った](https://qiita.com/zono2026/items/b17073fa7ceda5512ff9)
+- [Qiita: Claude Code / Codex CLIの残り使用量を常時表示するWindowsウィジェットを作った](https://qiita.com/zono2026/items/b17073fa7ceda5512ff9)
