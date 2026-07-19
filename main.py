@@ -4,6 +4,7 @@ import concurrent.futures
 import os
 import threading
 import tkinter as tk
+from datetime import datetime
 from tkinter import colorchooser
 
 import claude_usage
@@ -30,6 +31,7 @@ WIDGET_MARGIN_BOTTOM = 50  # leaves room above the Windows taskbar
 
 _state_lock = threading.Lock()
 _state = {"claude": None, "codex": None}
+_last_success = {"claude": None, "codex": None}
 _stop_event = threading.Event()
 _force_refresh_event = threading.Event()
 _poll_thread = None
@@ -39,6 +41,8 @@ _label = None
 _interval_var = None
 _startup_var = None
 _context_menu = None
+_detail_window = None
+_detail_label = None
 # Cached in memory so `_tick` (which runs every WIDGET_TICK_MS) doesn't have to
 # re-read config.json on every tick — only updated (and persisted) when the
 # user actually picks a new color via the context menu.
@@ -47,13 +51,23 @@ _current_bg_color = None
 
 def _get_state():
     with _state_lock:
-        return _state["claude"], _state["codex"]
+        return (
+            _state["claude"],
+            _state["codex"],
+            _last_success["claude"],
+            _last_success["codex"],
+        )
 
 
 def _set_state(claude_result, codex_result):
+    now = datetime.now()
     with _state_lock:
         _state["claude"] = claude_result
         _state["codex"] = codex_result
+        if claude_result and "error" not in claude_result:
+            _last_success["claude"] = now
+        if codex_result and "error" not in codex_result:
+            _last_success["codex"] = now
 
 
 def _safe_fetch(fetch_fn):
@@ -109,7 +123,7 @@ def _tick():
         _root.destroy()
         return
 
-    claude_result, codex_result = _get_state()
+    claude_result, codex_result, _, _ = _get_state()
     if claude_result is None and codex_result is None:
         text = "読み込み中..."
     else:
@@ -117,6 +131,7 @@ def _tick():
 
     _label.config(text=text, fg="white", bg=_current_bg_color)
     _reposition_to_bottom_right()
+    _update_detail_window()
 
     _root.after(WIDGET_TICK_MS, _tick)
 
@@ -172,6 +187,65 @@ def _make_set_interval_handler(minutes):
     return handler
 
 
+def _format_timestamp(dt):
+    if dt is None:
+        return None
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _update_detail_window():
+    # No-op unless the detail window is currently open, so this is safe to call
+    # unconditionally from _tick every WIDGET_TICK_MS.
+    if _detail_window is None or not _detail_window.winfo_exists():
+        return
+
+    claude_result, codex_result, claude_last_success, codex_last_success = _get_state()
+    text = formatting.build_status_detail(
+        claude_result,
+        codex_result,
+        _format_timestamp(claude_last_success),
+        _format_timestamp(codex_last_success),
+    )
+    _detail_label.config(text=text)
+
+
+def _on_close_detail_window():
+    global _detail_window, _detail_label
+    if _detail_window is not None:
+        _detail_window.destroy()
+    _detail_window = None
+    _detail_label = None
+
+
+def _on_show_status_detail():
+    global _detail_window, _detail_label
+
+    # Only one Toplevel is ever created; if it's already open, just bring it
+    # to the front instead of opening a duplicate.
+    if _detail_window is not None and _detail_window.winfo_exists():
+        _detail_window.lift()
+        _detail_window.focus_force()
+        return
+
+    _detail_window = tk.Toplevel(_root)
+    _detail_window.title("状態・エラー詳細")
+    _detail_window.attributes("-topmost", True)
+    _detail_window.protocol("WM_DELETE_WINDOW", _on_close_detail_window)
+
+    _detail_label = tk.Label(
+        _detail_window,
+        text="",
+        justify="left",
+        anchor="w",
+        padx=12,
+        pady=12,
+        font=("Segoe UI", 10),
+    )
+    _detail_label.pack()
+
+    _update_detail_window()
+
+
 def _build_context_menu(root):
     menu = tk.Menu(root, tearoff=0)
 
@@ -192,6 +266,7 @@ def _build_context_menu(root):
         )
     menu.add_command(label="背景色を変更", command=_on_change_color)
     menu.add_separator()
+    menu.add_command(label="状態・エラー詳細", command=_on_show_status_detail)
     menu.add_command(label="今すぐ更新", command=_on_refresh_now)
     menu.add_command(label="終了", command=_on_exit)
     return menu
