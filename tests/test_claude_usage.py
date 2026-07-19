@@ -1,3 +1,4 @@
+import io
 import json
 import sys
 import urllib.error
@@ -102,6 +103,46 @@ def test_fetch_usage_real_http_401_returns_error(tmp_path, monkeypatch):
 
     result = claude_usage.fetch_usage(credentials_path=str(creds_file))
     assert result == {"error": "http error 401"}
+
+
+def _raise_http_429(request, retry_after=None):
+    headers = {} if retry_after is None else {"Retry-After": retry_after}
+    body = io.BytesIO(b'{"error":{"type":"rate_limit_error"}}')
+    raise urllib.error.HTTPError(request.full_url, 429, "Too Many Requests", headers, body)
+
+
+def test_fetch_usage_http_429_returns_retry_after_seconds(tmp_path, monkeypatch):
+    creds_file = tmp_path / ".credentials.json"
+    creds_file.write_text(json.dumps({"claudeAiOauth": {"accessToken": "secret"}}))
+    monkeypatch.setattr(
+        claude_usage.urllib.request,
+        "urlopen",
+        lambda request, timeout=None: _raise_http_429(request, "1343"),
+    )
+
+    result = claude_usage.fetch_usage(credentials_path=str(creds_file))
+
+    assert result == {"error": "rate_limited", "retry_after_seconds": 1343}
+
+
+@pytest.mark.parametrize("retry_after", [None, "invalid", "-1"])
+def test_fetch_usage_http_429_uses_safe_default_for_bad_retry_after(
+    tmp_path, monkeypatch, retry_after
+):
+    creds_file = tmp_path / ".credentials.json"
+    creds_file.write_text(json.dumps({"claudeAiOauth": {"accessToken": "secret"}}))
+    monkeypatch.setattr(
+        claude_usage.urllib.request,
+        "urlopen",
+        lambda request, timeout=None: _raise_http_429(request, retry_after),
+    )
+
+    result = claude_usage.fetch_usage(credentials_path=str(creds_file))
+
+    assert result == {
+        "error": "rate_limited",
+        "retry_after_seconds": claude_usage.DEFAULT_RATE_LIMIT_BACKOFF_SECONDS,
+    }
 
 
 def test_fetch_usage_network_exception_returns_error_without_leaking_token(tmp_path):

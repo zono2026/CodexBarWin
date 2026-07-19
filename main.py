@@ -7,6 +7,7 @@ import tkinter as tk
 from datetime import datetime
 from tkinter import colorchooser
 
+import claude_polling
 import claude_usage
 import codex_usage
 import config
@@ -47,6 +48,7 @@ _detail_label = None
 # re-read config.json on every tick — only updated (and persisted) when the
 # user actually picks a new color via the context menu.
 _current_bg_color = None
+_claude_poller = claude_polling.ClaudeUsagePoller(claude_usage.fetch_usage)
 
 
 def _get_state():
@@ -87,7 +89,7 @@ def _poll_once():
     # request / subprocess round-trip), so running them sequentially would make
     # a single poll cycle take up to the SUM of both timeouts instead of the MAX.
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        claude_future = executor.submit(_safe_fetch, claude_usage.fetch_usage)
+        claude_future = executor.submit(_safe_fetch, _claude_poller.fetch)
         codex_future = executor.submit(_safe_fetch, codex_usage.fetch_usage)
         claude_result = claude_future.result()
         codex_result = codex_future.result()

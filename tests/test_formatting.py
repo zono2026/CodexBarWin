@@ -38,6 +38,23 @@ def test_build_title_shows_na_for_codex_on_error():
     assert "Codex:N/A" in title
 
 
+def test_build_title_shows_rate_limited_instead_of_na():
+    result = {"error": "rate_limited", "retry_after_seconds": 1343}
+
+    title = formatting.build_title(result, CODEX_OK)
+
+    assert "Claude:RATE LIMITED" in title
+    assert "Claude:N/A" not in title
+
+
+def test_build_title_marks_cached_claude_usage_as_stale():
+    result = {**CLAUDE_OK, "stale": True, "rate_limited": True, "retry_after_seconds": 1200}
+
+    title = formatting.build_title(result, CODEX_OK)
+
+    assert "Claude 5h:12% 7d:24% (stale)" in title
+
+
 def test_build_title_labels_codex_windows_by_actual_duration_not_position():
     # Regression: some Codex accounts only have the weekly (7d) window populated
     # in `primary`, with `secondary` entirely absent (used_percent/duration both
